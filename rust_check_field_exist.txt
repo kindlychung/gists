@@ -1,0 +1,26 @@
+Rust general discussion | Current release: 1.8 | | Playground https://play.rust-lang.org/ | Forum  https://users.rust-lang.org/ | New user channel: #rust-beginners  | Conduct https://www.rust-lang.org/conduct.html | Logs  https://botbot.me/mozilla/rust
+Topic set by mbrubeck!sid61@moz-2pjnuf.0j4i.jtu0.0101.2620.IP on Thu Apr 14 2016 19:00:30 GMT+0200 (CEST)
+22:21	kaiyin	how do you check if a struct A has a field a?
+22:21	Xirdus	kaiyin: i think it isnt possible as of now
+22:22	Xirdus	is there some way to write "unsized types only" bound?
+22:22	woboats	kaiyin: what do you mean by “has a field a”? Has a field of a certain type or a field with a certain name?
+22:22	woboats	Xirdus: not currently
+22:24	woboats	kaiyin: basically, the solution is to use a trait with a method that just returns a reference to that field, and implement it for all of the structs you want.
+22:26	woboats	kaiyin: there’s a proposal to let traits have fields, which would eliminate the method call.
+22:28	kefin	Anyone know how I log circularly (Say max logfile size of 100 MB) with envlogger?
+22:28	kefin	I could do it with a shell script that checks every X seconds, but it'd be cool if env logger had something
+22:30	kaiyin	woboats: I mean a field with a certain name.
+22:31	kaiyin	not quite understand " to use a trait with a method that just returns a reference to that field, and implement it for all of the structs you want"
+22:31	woboats	kaiyin: well, the field would have to have the same type anyway, right? Or at least the same traits. Otherwise what could you do with it?
+22:32	kaiyin	woboats: yes, the type is known beforehand.
+22:32	woboats	kaiyin: http://is.gd/og58cDhttps://play.rust-lang.org/?code=type%20A%20%3D%20()%3B%0A%0Atrait%20HasAnA%20%7B%0A%20%20%20%20fn%20a(%26self)%20-%3E%20%26A%3B%0A%7D%0A%0Afn%20main()%20%7B%0A%20%20%20%20let%20x%20%3D%20Box%3A%3Anew(Foo)%20as%20Box%3CA%3E%3B%0A%20%20%20%20x.to_c()%3B%0A%7D%0A&version=stable&backtrace=0
+22:32	woboats	sorry, ignore the stuff in main()
+22:32	woboats	http://is.gd/RVsNLHhttps://play.rust-lang.org/?code=type%20A%20%3D%20()%3B%0A%0Atrait%20HasAnA%20%7B%0A%20%20%20%20fn%20a(%26self)%20-%3E%20%26A%3B%0A%7D%0A%0Afn%20main()%20%7B%0A%7D%0A&version=stable&backtrace=0
+22:32	woboats	kaiyin: now implement this for all the structs with `a` fields
+22:33	woboats	(replace the type A with whatever type the field actually is, of course)
+22:34	habnabit	so, protobuf v3 has a canonical json representation, and i'm trying to figure out what the best way to parse it would be. use serde_json to parse to a serde_json::Value, and then pattern match along that?
+22:34	woboats	kaiyin: you can’t just implicitly pass types that have a field with the right name, because Rust doesn’t have subtypes like many languages do.
+22:34	kaiyin	woboats: ah, i see. brilliant.
+22:35	woboats	kaiyin: if you need to mutate `a`, you can add another method, `fn a_mut(&mut self) -. &mut A`.
+22:36	woboats	kaiyin: there’s a proposal to be able to define fields on the trait directly, instead of using these methods, but it hasn’t been accepted or implemented yet
+22:36	kaiyin	cool. thanks!

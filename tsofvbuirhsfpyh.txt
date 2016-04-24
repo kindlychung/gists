@@ -1,0 +1,81 @@
+how to append to a text file and delete the first k lines. 
+
+
+20:26	kaiyin	how do you efficiently append k lines to a text file while wiping out the first k lines? I am talking about files with millions of lines.
+20:27	Azy8BsKXVko	bluss: oh.
+20:27	Azy8BsKXVko	Forgot about that.
+20:27	cite-reader	kaiyin: You only need to write to the end?
+20:27	kaiyin	cite-reader: yes.
+20:27	tbelaire	do you want to wipe out the first k lines?  like a circular buffer?
+20:28	kaiyin	tbelaire: yes.
+20:28	cite-reader	Ohhh I missed that part. Hm. That's tougher.
+20:28		*** NameNotFound is now known as zz_NameNotFound
+20:28	tbelaire	Lines might be hard.  If it was fixed number of bytes, that's easier
+20:28	tbelaire	as you could just implement a disk backed circular buffer
+20:31	kurufu	usually to do anything with lines efficiently you have a datastructure centered around lines to begin with.
+20:33	kaiyin	kurufu: and eventually that data structure would still need to map to a file or multiple files, right?
+20:33	tbelaire	http://stackoverflow.com/questions/17330188/remove-first-n-lines-of-a-file-in-place-in-unix-command-line
+20:33	tbelaire	it doesn't look like it's easy to chop lines off the front of a file
+20:34	kurufu	if you wanted to edit files larger than the size of memory ya.
+20:34	tbelaire	kaiyin: do other programs need to read the file?
+20:35	tbelaire	you could implement a ring buffer that's saved to disk, but has some offsets you need to read it to get it in order
+20:35	kaiyin	tbelaire: no, so far only one program needs this file.
+20:35	tbelaire	I guess with mmap or something
+20:36	tbelaire	mmap a block of memory, keep two indexes into it?
+20:36	tbelaire	I'm not really familiar with mmap
+20:37	Boscop	error: unable to infer enough type information about `_`; type annotations or generic parameter binding required
+20:37	kaiyin	tbelaire: what do you mean "has some offsets you need to read it to get it in order"?
+20:37	Boscop	let foo: u8 = try!(v[0].parse::<u8>());
+20:37	Boscop	why the error?
+20:37	Boscop	it is annotated
+20:38	tbelaire	Boscop, try expanding out the try macro, as it does a match internally
+20:38	aphistic	is anyone familiar with using shm_open, fdopen and fflush from libc on osx? it's working fine on linux but when i try to run it on osx i get an "operation not supported" for both fflush and fseek
+20:38	tbelaire	that's where there's a lack of information, in the error case I bet
+20:38		*** zz_NameNotFound is now known as NameNotFound
+20:38	tbelaire	kaiyin: If you view your log you want to write to as an array
+20:39	tbelaire	you can keep an index of where you last wrote, and write there next, then increment it
+20:39	tbelaire	wrapping around when you hit the end of the array
+20:40	Boscop	tbelaire: thanks!
+20:40	tbelaire	then you also need to keep track of the "start" of your array, which moves forward when you "forget" the lines from the front
+20:40	Boscop	the outer closure had an infered return type
+20:42	cite-reader	Bonus points: do all of your bookkeeping atomically, in the sense that if your program dies unexpectedly at an arbitrary point the next run will never see broken invariants.
+20:42	kaiyin	tbelaire: i see.
+20:42	ubsan_	cite-reader: that would be interesting
+20:42	ubsan_	truly panic-safe
+20:43	ubsan_	I wish more people did that xP
+20:44	tbelaire	kaiyin: If this let you provide the backing storage, it would be perfect
+20:44	cite-reader	You'd probably have to lift code from sqlite, I don't actually know how you do that with complex file structures.
+20:44	tbelaire	https://doc.rust-lang.org/src/collections/up/src/libcollections/vec_deque.rs.html#11-2399
+20:44	tbelaire	but you'd need to modify it to work on a [T] you pass in and get from mmap
+20:44	kurufu	I thought sqlite didnt guarentee crash safety.
+20:44	tbelaire	and remove the resizing stuff
+20:44	ubsan_	cite-reader: I can't imagine doing it with existing libraries...
+20:44	tbelaire	and maybe add in calls to fflush?
+20:45	cite-reader	fsync is _required_ for crash-safe commits, yeah, but not sufficient.
+20:45	cite-reader	(Your FS and disks need to cooperate too.)
+20:48	kurufu	Worrying about your FS and disks for crash safety? I feel like im in the postgres channel
+20:48	ubsan_	I can imagine only writing to disk in an atomic disk
+20:48	ubsan_	errr
+20:48	ubsan_	atomic way
+20:48	kurufu	Be sure your disks have battery backups if you really want to guarentee safety. 
+20:48	coder543	hey, is there a syntax for forcibly generating a warning message in Rust? like #warning "blah blah" in C-like languages?
+20:49	ubsan_	how do I say that
+20:49	cite-reader	Crash-only software?
+20:49	cite-reader	(Really cool paper)
+20:50	coder543	Not being able to generate compiler warnings is a major drawback of Swift, as I noticed when helping a friend with some Swift code earlier, and that made me start thinking about whether Rust could even do it as well
+20:51	steveklabnik	coder543: you can write new lints as compiler plugins
+20:51	bluss	coder543: it's more specific, but Rust 1.9 stabilizes the #[deprecated] attribute
+20:51	steveklabnik	!crate clippy
+20:51	steveklabnik	gah, where's the bot? 
+20:51	bluss	coder543: so that's one warning generating thing I'm looking forward to
+20:51	steveklabnik	but, that's the closest kind of thing. 
+20:54	coder543	it's just nice when you're working on code and you recognize that a section needs more work to be able to put a warning there, so you get reminded to go back and improve it every time you compile it. Deprecated doesn't quite cover that, but it might work in a pinch.
+20:54	ubsan_	you'd do a write to a temp file, and then move it over the permanent file
+20:54	ubsan_	and you'd make sure the temp file is always consistent
+20:54	ubsan_	is what I'm saying
+20:54	coder543	Developing your own lints just seems like overkill for this use case, but it might work. Just need to develop a generic linter for this purpose, and then everyone could use it through clippy
+20:55	cite-reader	That's the easiest way to do it. If you want to optimize you'd probably lift details from say https://www.sqlite.org/atomiccommit.html
+20:56	cite-reader	Probably not needed unless your files are huge.
+20:57	ubsan_	I'm coming from games, where save files... probably shouldn't be huge?
+20:57	ubsan_	xP
+20:57	cite-reader	You'd certainly hope not!
